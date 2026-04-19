@@ -11,7 +11,7 @@
         "laravel/sanctum": "^4.2",
         "laravel/tinker": "^2.10.1",
         "smalot/pdfparser": "*",
-        "soneso/stellar-php-sdk": "^1.2"
+        "soneso/stellar-php-sdk": "1.9.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

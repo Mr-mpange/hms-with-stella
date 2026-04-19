@@ -58,17 +58,24 @@ Route::get('/health', function () {
         $status['stellar'] = ['status' => 'unreachable', 'critical' => true, 'note' => 'CRITICAL — record creation and payments are blocked'];
     }
 
-    // Soroban RPC (CRITICAL — insurance payments require Soroban)
+    // Soroban RPC (non-critical — insurance falls back to manual)
     try {
+        $body = json_encode(['jsonrpc' => '2.0', 'method' => 'getHealth', 'id' => 1]);
         $response = \Illuminate\Support\Facades\Http::timeout(5)
-            ->post(config('stellar.soroban_rpc_url'), ['jsonrpc' => '2.0', 'method' => 'getHealth', 'id' => 1]);
+            ->withBody($body, 'application/json')
+            ->post(config('stellar.soroban_rpc_url'));
+        $result = $response->json('result.status');
         $status['soroban'] = [
-            'status'   => $response->successful() ? 'ok' : 'error',
-            'critical' => true,
-            'note'     => 'Insurance payment release requires Soroban',
+            'status'   => $result === 'healthy' ? 'ok' : 'error',
+            'critical' => false,
+            'note'     => 'Insurance falls back to manual approval if Soroban is down',
+            'contracts' => [
+                'insurance' => config('stellar.insurance_contract_id'),
+                'payment'   => config('stellar.payment_contract_id'),
+            ],
         ];
     } catch (\Exception $e) {
-        $status['soroban'] = ['status' => 'unreachable', 'critical' => true, 'note' => 'CRITICAL — insurance payments are blocked'];
+        $status['soroban'] = ['status' => 'unreachable', 'critical' => false, 'note' => 'Non-critical — system continues without Soroban'];
     }
 
     // Overall system status — database AND Stellar are both critical
