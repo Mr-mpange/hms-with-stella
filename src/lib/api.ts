@@ -1,12 +1,14 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { io, Socket } from 'socket.io-client';
 
-// API Base URL - Production: hasetcompany.or.tz
+// API Base URL
+// Production: uses VITE_API_URL (defaults to /api for same-origin Hostinger deployment)
+// Development: uses VITE_API_URL or falls back to localhost:8000
 const getBaseURL = (): string => {
   if (import.meta.env.PROD) {
-    return 'https://hasetcompany.or.tz/api';
+    return import.meta.env.VITE_API_URL || '/api';
   }
-  return import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+  return import.meta.env.VITE_API_URL || 'https://mpanges.com/api';
 };
 
 // Create axios instance for API calls
@@ -48,7 +50,7 @@ let socket: Socket | null = null;
 export const getSocket = (): Socket => {
   if (!socket) {
     const socketURL = import.meta.env.PROD 
-      ? 'https://api.hms.co.tz' 
+      ? 'https://mpanges.com' 
       : (import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000');
     
     socket = io(socketURL, {

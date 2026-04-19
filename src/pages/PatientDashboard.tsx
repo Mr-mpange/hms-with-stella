@@ -5,11 +5,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import api from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Calendar, File, Activity, Loader2, Search } from 'lucide-react';
+import { Calendar, File, Activity, Loader2, Search, Share2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { PatientSharingPortal } from '@/components/PatientSharingPortal';
 
 export default function PatientDashboard() {
   const { user, hasRole } = useAuth();
@@ -276,6 +278,22 @@ export default function PatientDashboard() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Sharing Portal */}
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Share2 className="h-5 w-5 text-blue-600" />
+                  Share My Records
+                </CardTitle>
+                <CardDescription>
+                  Generate a one-time access token to share your medical records with another doctor
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PatientSharingPortal patientId={patientData.id} />
+              </CardContent>
+            </Card>
           </>
         )}
       </div>
