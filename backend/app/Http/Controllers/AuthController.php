@@ -15,15 +15,21 @@ class AuthController extends Controller
 
     /**
      * POST /api/auth/login
+     * Accepts email OR phone number as identifier.
      */
     public function login(Request $request): JsonResponse
     {
         $request->validate([
-            'email'    => 'required|email',
+            'email'    => 'required|string', // accepts email or phone
             'password' => 'required',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $identifier = $request->input('email');
+
+        // Try email first, then phone
+        $user = User::where('email', $identifier)->first()
+             ?? User::where('phone', $identifier)->first()
+             ?? User::where('phone', $this->normalizePhone($identifier))->first();
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
@@ -88,5 +94,19 @@ class AuthController extends Controller
         }
 
         return response()->json(['user' => $this->account->formatUser($user)]);
+    }
+
+    // ─── Private ────────────────────────────────────────────────────────────
+
+    private function normalizePhone(string $phone): string
+    {
+        $phone = preg_replace('/\D/', '', $phone);
+        if (str_starts_with($phone, '0') && strlen($phone) === 10) {
+            return '+255' . substr($phone, 1);
+        }
+        if (str_starts_with($phone, '255') && strlen($phone) === 12) {
+            return '+' . $phone;
+        }
+        return $phone;
     }
 }

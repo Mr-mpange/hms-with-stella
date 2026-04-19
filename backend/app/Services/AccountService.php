@@ -298,6 +298,58 @@ class AccountService
         Log::info('AccountService: account deactivated', ['user_id' => $user->id]);
     }
 
+    /**
+     * Create a patient portal account linked to a patient record.
+     * Called by reception after registering a patient.
+     *
+     * Default password: HMS1234 (patient should change on first login)
+     * Login: phone number + HMS1234
+     *
+     * @param  \App\Models\Patient  $patient
+     * @return array {user_id, phone, default_password, message}
+     */
+    public function createPatientAccount(\App\Models\Patient $patient): array
+    {
+        // Check if account already exists for this phone
+        $existing = User::where('phone', $patient->phone)->first();
+        if ($existing) {
+            return [
+                'user_id'          => $existing->id,
+                'phone'            => $patient->phone,
+                'already_exists'   => true,
+                'message'          => 'Account already exists for this phone number.',
+            ];
+        }
+
+        $defaultPassword = 'HMS1234';
+
+        $user = User::create([
+            'name'      => $patient->full_name,
+            'email'     => $patient->email ?? ($patient->phone . '@patient.hms'),
+            'password'  => Hash::make($defaultPassword),
+            'phone'     => $patient->phone,
+            'role'      => 'patient',
+            'is_active' => true,
+        ]);
+
+        // Link user to patient record
+        $patient->update(['user_id' => $user->id]);
+
+        Log::info('AccountService: patient account created', [
+            'user_id'    => $user->id,
+            'patient_id' => $patient->id,
+            'phone'      => $patient->phone,
+        ]);
+
+        return [
+            'user_id'          => $user->id,
+            'phone'            => $patient->phone,
+            'default_password' => $defaultPassword,
+            'already_exists'   => false,
+            'message'          => "Account created. Patient can login with phone: {$patient->phone} and password: {$defaultPassword}",
+        ];
+    }
+
     // ─── Private ─────────────────────────────────────────────────────────────
 
     private function generateAndAttachWallet(User $user): array

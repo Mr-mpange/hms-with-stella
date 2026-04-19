@@ -65,6 +65,7 @@ export default function ReceptionistDashboard() {
   const [insuranceClaims, setInsuranceClaims] = useState<any[]>([]);
   const [selectedStellarPatient, setSelectedStellarPatient] = useState<any>(null);
   const [showStellarDialog, setShowStellarDialog] = useState(false);
+  const [lastRegisteredPatient, setLastRegisteredPatient] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true); // Initial load only
@@ -1749,6 +1750,20 @@ export default function ReceptionistDashboard() {
 
       // Success - patient created
       toast.success('Patient registered and payment received!');
+
+      // Auto-create portal account for the patient
+      if (patientId) {
+        try {
+          const accRes = await api.post(`/patients/${patientId}/create-account`);
+          const p = patientRes.data.patient || { id: patientId, full_name: registerForm.full_name, phone: registerForm.phone };
+          setLastRegisteredPatient({ ...p, portal_info: accRes.data });
+          if (!accRes.data.already_exists) {
+            toast.info(`Portal account created. Patient can login with phone: ${registerForm.phone} and password: HMS1234`);
+          }
+        } catch {
+          // account creation failure doesn't block registration
+        }
+      }
 
       // If registering with appointment, create appointment instead of immediate visit
       if (registerWithAppointment && appointmentDepartmentId && appointmentDoctorId && appointmentDate && appointmentTime) {
@@ -3661,6 +3676,25 @@ export default function ReceptionistDashboard() {
           patient={selectedStellarPatient}
           onIdentityAssigned={fetchData}
         />
+      )}
+
+      {/* Patient Portal Account Info — shown after registration */}
+      {lastRegisteredPatient && (
+        <div className="fixed bottom-4 right-4 z-50 bg-white border border-blue-200 rounded-xl shadow-lg p-4 max-w-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="font-semibold text-sm text-blue-800">✅ Portal Account Ready</p>
+              <p className="text-xs text-gray-600"><strong>{lastRegisteredPatient.full_name}</strong></p>
+              <p className="text-xs text-gray-600">Phone: <strong>{lastRegisteredPatient.phone}</strong></p>
+              <p className="text-xs text-gray-600">Password: <strong>HMS1234</strong></p>
+              <p className="text-xs text-muted-foreground">Patient can login at: /patient-login</p>
+            </div>
+            <button
+              onClick={() => setLastRegisteredPatient(null)}
+              className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+            >×</button>
+          </div>
+        </div>
       )}
 
     </>

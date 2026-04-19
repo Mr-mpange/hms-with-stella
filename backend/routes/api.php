@@ -1323,3 +1323,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/patients/{id}/access-grants/{grantId}', [PatientIdentityController::class, 'revokeGrant']);
     Route::delete('/patients/{id}/access-grants',       [PatientIdentityController::class, 'revokeAll']);
 });
+
+// ─── Patient Account Creation (by reception) ─────────────────────────────────
+Route::middleware('auth:sanctum')->group(function () {
+    // Reception creates a patient portal account after registering a patient
+    // Patient gets phone number as username + default password HMS1234
+    Route::post('/patients/{id}/create-account', function (string $id) {
+        $patient = \App\Models\Patient::findOrFail($id);
+        $svc     = app(\App\Services\AccountService::class);
+        $result  = $svc->createPatientAccount($patient);
+        return response()->json(['success' => true, ...$result]);
+    });
+});

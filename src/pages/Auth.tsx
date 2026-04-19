@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Activity, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
@@ -100,12 +100,12 @@ export default function Auth() {
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signin-email">Email</Label>
+                  <Label htmlFor="signin-email">Email or Phone Number</Label>
                   <Input
                     id="signin-email"
                     name="email"
-                    type="email"
-                    placeholder="doctor@hospital.com"
+                    type="text"
+                    placeholder="doctor@hospital.com or 0712345678"
                     required
                     disabled={isLoading}
                   />
@@ -120,17 +120,20 @@ export default function Auth() {
                     required
                     disabled={isLoading}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Patients: use your phone number + default password <strong>HMS1234</strong>
+                  </p>
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Signing in...
-                    </>
-                  ) : (
-                    'Sign In'
-                  )}
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing in...</>
+                  ) : 'Sign In'}
                 </Button>
+                <div className="text-center">
+                  <Link to="/patient-login" className="text-sm text-blue-600 hover:underline">
+                    Patient? Login with phone number →
+                  </Link>
+                </div>
               </form>
             </TabsContent>
 

@@ -17,6 +17,8 @@ import Auth from "./pages/Auth";
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const DoctorDashboard = lazy(() => import("./pages/DoctorDashboard"));
 const PatientDashboard = lazy(() => import("./pages/PatientDashboard"));
+const PatientLogin = lazy(() => import("./pages/PatientLogin"));
+const PatientPortal = lazy(() => import("./pages/PatientPortal"));
 const LabDashboard = lazy(() => import("./pages/LabDashboard"));
 const PharmacyDashboard = lazy(() => import("./pages/PharmacyDashboard"));
 const BillingDashboard = lazy(() => import("./pages/BillingDashboard"));
@@ -90,6 +92,15 @@ const App = () => {
               element={
                 <ProtectedRoute>
                   <PatientDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/patient-login" element={<PatientLogin />} />
+            <Route
+              path="/patient-portal"
+              element={
+                <ProtectedRoute>
+                  <PatientPortal />
                 </ProtectedRoute>
               }
             />
