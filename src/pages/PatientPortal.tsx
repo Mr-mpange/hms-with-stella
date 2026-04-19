@@ -151,7 +151,7 @@ export default function PatientPortal() {
           <CardContent className="py-3 px-4">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-amber-800">
-                <strong>Security:</strong> Change your default password <strong>HMS1234</strong> to keep your account safe.
+                <strong>Security:</strong> Make sure your password is strong and only you know it.
               </p>
               <Button size="sm" variant="outline" className="border-amber-300 text-amber-700 text-xs flex-shrink-0"
                 onClick={() => setShowChangePassword(true)}>
@@ -418,7 +418,7 @@ export default function PatientPortal() {
           <form onSubmit={changePassword} className="space-y-4 pt-2">
             <div className="space-y-2">
               <Label>Current Password</Label>
-              <Input type="password" placeholder="HMS1234 (default)" value={currentPassword}
+              <Input type="password" placeholder="Current password" value={currentPassword}
                 onChange={e => setCurrentPassword(e.target.value)} required />
             </div>
             <div className="space-y-2">

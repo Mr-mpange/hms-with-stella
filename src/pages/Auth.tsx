@@ -121,7 +121,7 @@ export default function Auth() {
                     disabled={isLoading}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Patients: use your phone number + default password <strong>HMS1234</strong>
+                    Patients: use your phone number to login
                   </p>
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>

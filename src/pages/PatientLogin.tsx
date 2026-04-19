@@ -75,9 +75,6 @@ export default function PatientLogin() {
                 required
                 disabled={loading}
               />
-              <p className="text-xs text-muted-foreground">
-                First time? Your default password is <strong>HMS1234</strong>
-              </p>
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>
