@@ -18,7 +18,82 @@ import { format } from 'date-fns';
 import api from '@/lib/api';
 import { PatientSharingPortal } from '@/components/PatientSharingPortal';
 
-// ─── Visit Card with expandable full report ──────────────────────────────────
+// ─── Medical Records with IPFS + Stellar verification links ─────────────────
+function MedicalRecordLinks({ patientId }: { patientId: string }) {
+  const [records, setRecords] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get(`/records/${patientId}`)
+      .then(({ data }) => setRecords(data.records || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [patientId]);
+
+  if (loading) return null;
+  if (records.length === 0) return null;
+
+  return (
+    <Card className="border-blue-200">
+      <CardContent className="pt-4 pb-3 space-y-3">
+        <p className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+          <span>🔐</span> Your Encrypted Medical Records
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Your records are encrypted and stored on IPFS. Each one is anchored on the Stellar blockchain as proof it hasn't been tampered with.
+        </p>
+        {records.map((r: any) => (
+          <div key={r.id} className="border rounded-lg p-3 space-y-2 bg-gray-50">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium capitalize">{r.record_type} Record</p>
+                <p className="text-xs text-muted-foreground">
+                  {r.created_at ? format(new Date(r.created_at), 'dd MMM yyyy') : '—'}
+                </p>
+              </div>
+              <Badge variant={r.status === 'verified' ? 'default' : 'secondary'} className="text-xs">
+                {r.status === 'verified' ? '✓ Verified' : r.status}
+              </Badge>
+            </div>
+
+            {/* Two action buttons */}
+            <div className="flex gap-2">
+              {/* IPFS button */}
+              <a
+                href={`https://gateway.pinata.cloud/ipfs/${r.cid_hash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 flex items-center justify-center gap-1.5 bg-orange-500 text-white text-xs py-2 rounded-lg hover:bg-orange-600 transition-colors"
+                title="View encrypted record on IPFS"
+              >
+                <span>📦</span> IPFS
+              </a>
+
+              {/* Stellar button */}
+              {r.stellar_tx_hash && (
+                <a
+                  href={`https://stellar.expert/explorer/testnet/tx/${r.stellar_tx_hash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-purple-600 text-white text-xs py-2 rounded-lg hover:bg-purple-700 transition-colors"
+                  title="View blockchain proof on Stellar"
+                >
+                  <span>⭐</span> Stellar
+                </a>
+              )}
+            </div>
+
+            <p className="text-xs font-mono text-gray-400 truncate">
+              CID: {r.cid_hash?.substring(0, 30)}...
+            </p>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Visit Card with expandable full report ───────────────────────────────────
 function VisitCard({ visit: v }: { visit: any }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -203,6 +278,7 @@ export default function PatientPortal() {
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
   const [labTests, setLabTests] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -232,11 +308,12 @@ export default function PatientPortal() {
       setPatient(p);
 
       // Load all patient data in parallel
-      const [visitsRes, prescRes, labRes, invRes] = await Promise.allSettled([
+      const [visitsRes, prescRes, labRes, invRes, payRes] = await Promise.allSettled([
         api.get(`/visits?patient_id=${p.id}&limit=50`),
         api.get(`/prescriptions?patient_id=${p.id}&limit=50`),
         api.get(`/lab-tests?patient_id=${p.id}&limit=50`),
         api.get(`/invoices?patient_id=${p.id}&limit=50`),
+        api.get(`/payments?patient_id=${p.id}&limit=50`),
       ]);
 
       if (visitsRes.status === 'fulfilled') {
@@ -250,6 +327,9 @@ export default function PatientPortal() {
       }
       if (invRes.status === 'fulfilled') {
         setInvoices(invRes.value.data.invoices || invRes.value.data.data || []);
+      }
+      if (payRes.status === 'fulfilled') {
+        setPayments(payRes.value.data.payments || payRes.value.data.data || []);
       }
     } catch (e) {
       toast.error('Failed to load your data');
@@ -428,6 +508,9 @@ export default function PatientPortal() {
             ) : visits.map(v => (
               <VisitCard key={v.id} visit={v} />
             ))}
+
+            {/* Blockchain verification section */}
+            {patient?.id && <MedicalRecordLinks patientId={patient.id} />}
           </TabsContent>
 
           {/* ── Lab Tests ── */}
@@ -489,6 +572,47 @@ export default function PatientPortal() {
               </Card>
             </div>
 
+            {/* Payments with blockchain links */}
+            {payments.filter(p => p.stellar_tx_hash).length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-gray-600 flex items-center gap-1">
+                  ⛓ Blockchain Payment Receipts
+                </p>
+                {payments.filter(p => p.stellar_tx_hash).map(pay => (
+                  <Card key={pay.id} className="border-purple-200 bg-purple-50">
+                    <CardContent className="pt-3 pb-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">TSh {parseFloat(pay.amount || 0).toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {pay.payment_date ? format(new Date(pay.payment_date), 'dd MMM yyyy') : '—'}
+                            {pay.xlm_amount && <span className="ml-2 text-purple-600">· {pay.xlm_amount} XLM</span>}
+                          </p>
+                        </div>
+                        {/* Stellar Explorer link */}
+                        <a
+                          href={`https://stellar.expert/explorer/testnet/tx/${pay.stellar_tx_hash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 bg-purple-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-purple-700 transition-colors"
+                          title="View on Stellar blockchain"
+                        >
+                          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
+                          </svg>
+                          ⭐ Stellar
+                        </a>
+                      </div>
+                      <p className="text-xs font-mono text-purple-700 mt-2 truncate">
+                        TX: {pay.stellar_tx_hash?.substring(0, 32)}...
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {/* Invoices */}
             {invoices.length === 0 ? (
               <Card><CardContent className="pt-6 text-center text-muted-foreground">No invoices yet</CardContent></Card>
             ) : invoices.map(inv => (
@@ -529,7 +653,10 @@ export default function PatientPortal() {
           </TabsContent>
 
           {/* ── Share Records ── */}
-          <TabsContent value="share" className="mt-3">
+          <TabsContent value="share" className="mt-3 space-y-3">
+            {/* Medical Records with IPFS + Stellar links */}
+            {patient?.id && <MedicalRecordLinks patientId={patient.id} />}
+
             {patient?.id ? (
               <PatientSharingPortal patientId={patient.id} />
             ) : (
