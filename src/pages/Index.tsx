@@ -25,8 +25,7 @@ const Index = () => {
         navigate('/auth');
       } else {
         // Default redirect for authenticated users with no roles
-
-        navigate('/patient');
+        navigate('/patient-portal');
       }
       return;
     }
@@ -57,9 +56,9 @@ const Index = () => {
         lab_tech: '/lab',
         pharmacist: '/pharmacy',
         billing: '/billing',
-        patient: '/patient'
+        patient: '/patient-portal'
       };
-      const targetRoute = roleRoutes[primaryRole] || '/patient';
+      const targetRoute = roleRoutes[primaryRole] || '/patient-portal';
 
       navigate(targetRoute);
     } else if (roles && roles.length > 0) {
@@ -87,13 +86,11 @@ const Index = () => {
 
         navigate('/billing');
       } else {
-
-        navigate('/patient');
+        navigate('/patient-portal');
       }
     } else {
       // No roles found, redirect to patient dashboard as default
-
-      navigate('/patient');
+      navigate('/patient-portal');
     }
   }, [user, primaryRole, roles, loading, rolesLoaded, navigate, retryCount]);
 

@@ -24,7 +24,7 @@ export default function PatientLogin() {
         toast.error(error.message || 'Login failed. Check your phone number and password.');
       } else {
         toast.success('Welcome!');
-        navigate('/patient');
+        navigate('/patient-portal');
       }
     } finally {
       setLoading(false);
