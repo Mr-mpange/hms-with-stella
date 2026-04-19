@@ -18,6 +18,182 @@ import { format } from 'date-fns';
 import api from '@/lib/api';
 import { PatientSharingPortal } from '@/components/PatientSharingPortal';
 
+// ─── Visit Card with expandable full report ──────────────────────────────────
+function VisitCard({ visit: v }: { visit: any }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const vitals = v.vital_signs || {};
+  const hasVitals = Object.keys(vitals).length > 0;
+  const hasDiagnosis = v.final_diagnosis || v.provisional_diagnosis;
+  const hasHistory = v.chief_complaint_detailed || v.history_present_illness;
+
+  return (
+    <Card className="overflow-hidden">
+      {/* Summary row — always visible */}
+      <button
+        className="w-full text-left"
+        onClick={() => setExpanded(e => !e)}
+      >
+        <CardContent className="pt-4 pb-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-blue-500" />
+              <span className="font-semibold text-sm">
+                {v.visit_date ? format(new Date(v.visit_date), 'dd MMM yyyy') : '—'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant={v.overall_status === 'Completed' ? 'default' : 'secondary'} className="text-xs">
+                {v.overall_status || v.status}
+              </Badge>
+              <span className="text-muted-foreground text-xs">{expanded ? '▲' : '▼ Full report'}</span>
+            </div>
+          </div>
+
+          {/* Quick summary */}
+          {v.chief_complaint && (
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-gray-700">Complaint:</span> {v.chief_complaint}
+            </p>
+          )}
+          {hasDiagnosis && (
+            <p className="text-sm">
+              <span className="font-medium text-blue-700">Diagnosis:</span> {v.final_diagnosis || v.provisional_diagnosis}
+              {(v.final_icd10_code || v.icd10_code) && (
+                <span className="ml-2 text-xs text-muted-foreground">({v.final_icd10_code || v.icd10_code})</span>
+              )}
+            </p>
+          )}
+          {v.doctor?.name && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Stethoscope className="h-3 w-3" /> Dr. {v.doctor.name}
+            </p>
+          )}
+        </CardContent>
+      </button>
+
+      {/* Full report — expanded */}
+      {expanded && (
+        <div className="border-t bg-gray-50 px-4 py-4 space-y-4 text-sm">
+
+          {/* Vital Signs */}
+          {hasVitals && (
+            <section>
+              <p className="font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                <span>📊</span> Vital Signs
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {vitals.blood_pressure && <div className="bg-white rounded p-2 border"><p className="text-xs text-muted-foreground">Blood Pressure</p><p className="font-medium">{vitals.blood_pressure}</p></div>}
+                {vitals.temperature && <div className="bg-white rounded p-2 border"><p className="text-xs text-muted-foreground">Temperature</p><p className="font-medium">{vitals.temperature}°C</p></div>}
+                {vitals.weight && <div className="bg-white rounded p-2 border"><p className="text-xs text-muted-foreground">Weight</p><p className="font-medium">{vitals.weight} kg</p></div>}
+                {vitals.height && <div className="bg-white rounded p-2 border"><p className="text-xs text-muted-foreground">Height</p><p className="font-medium">{vitals.height} cm</p></div>}
+                {vitals.spo2 && <div className="bg-white rounded p-2 border"><p className="text-xs text-muted-foreground">SpO₂</p><p className="font-medium">{vitals.spo2}%</p></div>}
+                {vitals.pulse && <div className="bg-white rounded p-2 border"><p className="text-xs text-muted-foreground">Pulse</p><p className="font-medium">{vitals.pulse} bpm</p></div>}
+              </div>
+            </section>
+          )}
+
+          {/* Complaint & History */}
+          {(v.chief_complaint || hasHistory) && (
+            <section>
+              <p className="font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                <span>🗣</span> Patient's Complaint
+              </p>
+              <div className="bg-white rounded p-3 border space-y-2">
+                {v.chief_complaint && <p><span className="text-xs text-muted-foreground block">Main complaint</span>{v.chief_complaint}</p>}
+                {v.chief_complaint_detailed && <p><span className="text-xs text-muted-foreground block">Details</span>{v.chief_complaint_detailed}</p>}
+                {v.history_present_illness && <p><span className="text-xs text-muted-foreground block">History of illness</span>{v.history_present_illness}</p>}
+              </div>
+            </section>
+          )}
+
+          {/* Nurse Notes */}
+          {v.nurse_notes && (
+            <section>
+              <p className="font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                <span>💉</span> Nurse Notes
+              </p>
+              <div className="bg-white rounded p-3 border">
+                <p>{v.nurse_notes}</p>
+              </div>
+            </section>
+          )}
+
+          {/* Diagnosis */}
+          {hasDiagnosis && (
+            <section>
+              <p className="font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                <span>🔬</span> Doctor's Diagnosis
+              </p>
+              <div className="bg-blue-50 rounded p-3 border border-blue-200 space-y-2">
+                {v.provisional_diagnosis && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Working Diagnosis</p>
+                    <p className="font-medium">{v.provisional_diagnosis}
+                      {v.icd10_code && <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-1 rounded">{v.icd10_code}</span>}
+                    </p>
+                  </div>
+                )}
+                {v.final_diagnosis && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Final Diagnosis</p>
+                    <p className="font-bold text-blue-800">{v.final_diagnosis}
+                      {v.final_icd10_code && <span className="ml-2 text-xs bg-blue-200 text-blue-800 px-1 rounded">{v.final_icd10_code}</span>}
+                    </p>
+                  </div>
+                )}
+                {v.doctor_notes && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Doctor's Notes</p>
+                    <p>{v.doctor_notes}</p>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* Treatment */}
+          {(v.treatment_rx || v.treatment_plan || v.other_management) && (
+            <section>
+              <p className="font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                <span>💊</span> Treatment Given
+              </p>
+              <div className="bg-green-50 rounded p-3 border border-green-200 space-y-2">
+                {v.treatment_rx && <div><p className="text-xs text-muted-foreground">Prescription / Treatment</p><p>{v.treatment_rx}</p></div>}
+                {v.treatment_plan && <div><p className="text-xs text-muted-foreground">Treatment Plan</p><p>{v.treatment_plan}</p></div>}
+                {v.other_management && <div><p className="text-xs text-muted-foreground">Other Management</p><p>{v.other_management}</p></div>}
+              </div>
+            </section>
+          )}
+
+          {/* Investigation Plan */}
+          {v.investigation_plan && (
+            <section>
+              <p className="font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                <span>🧪</span> Investigations Ordered
+              </p>
+              <div className="bg-white rounded p-3 border">
+                <p>{v.investigation_plan}</p>
+              </div>
+            </section>
+          )}
+
+          {/* Doctor info */}
+          {v.doctor?.name && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1 pt-1 border-t">
+              <Stethoscope className="h-3 w-3" />
+              Attended by Dr. {v.doctor.name}
+              {v.doctor_completed_at && (
+                <span className="ml-1">· {format(new Date(v.doctor_completed_at), 'dd MMM yyyy HH:mm')}</span>
+              )}
+            </p>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default function PatientPortal() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -106,7 +282,7 @@ export default function PatientPortal() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
       </div>
     );
@@ -121,7 +297,7 @@ export default function PatientPortal() {
     .reduce((s, i) => s + parseFloat(i.balance || 0), 0);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
 
       {/* Header */}
       <div className="bg-white border-b shadow-sm px-4 py-3 flex items-center justify-between sticky top-0 z-10">
@@ -144,7 +320,7 @@ export default function PatientPortal() {
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto p-4 space-y-4">
+      <div className="p-3 space-y-3 pb-8">
 
         {/* Default password warning */}
         <Card className="border-amber-200 bg-amber-50">
@@ -250,49 +426,7 @@ export default function PatientPortal() {
             {visits.length === 0 ? (
               <Card><CardContent className="pt-6 text-center text-muted-foreground">No visits yet</CardContent></Card>
             ) : visits.map(v => (
-              <Card key={v.id}>
-                <CardContent className="pt-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-blue-500" />
-                      <span className="font-medium text-sm">
-                        {v.visit_date ? format(new Date(v.visit_date), 'dd MMM yyyy') : '—'}
-                      </span>
-                    </div>
-                    <Badge variant={v.overall_status === 'Completed' ? 'default' : 'secondary'} className="text-xs">
-                      {v.overall_status || v.status}
-                    </Badge>
-                  </div>
-
-                  {v.chief_complaint && (
-                    <div><p className="text-xs text-muted-foreground">Complaint</p>
-                    <p className="text-sm">{v.chief_complaint}</p></div>
-                  )}
-
-                  {(v.final_diagnosis || v.provisional_diagnosis) && (
-                    <div className="bg-blue-50 rounded-lg p-2">
-                      <p className="text-xs text-muted-foreground">Diagnosis</p>
-                      <p className="text-sm font-medium">{v.final_diagnosis || v.provisional_diagnosis}</p>
-                      {(v.final_icd10_code || v.icd10_code) && (
-                        <Badge variant="outline" className="text-xs mt-1">
-                          ICD-10: {v.final_icd10_code || v.icd10_code}
-                        </Badge>
-                      )}
-                    </div>
-                  )}
-
-                  {v.treatment_rx && (
-                    <div><p className="text-xs text-muted-foreground">Treatment</p>
-                    <p className="text-sm">{v.treatment_rx}</p></div>
-                  )}
-
-                  {v.doctor?.name && (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Stethoscope className="h-3 w-3" /> Dr. {v.doctor.name}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
+              <VisitCard key={v.id} visit={v} />
             ))}
           </TabsContent>
 

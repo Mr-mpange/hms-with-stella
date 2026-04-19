@@ -32,8 +32,9 @@ export default function PatientLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <Card className="w-full max-w-sm shadow-xl">
+    <div className="min-h-screen bg-white flex flex-col">
+      <div className="flex-1 flex items-start justify-center pt-8 px-4">
+      <Card className="w-full max-w-sm shadow-sm border-gray-200">
         <CardHeader className="text-center space-y-3">
           <div className="flex justify-center">
             <img src="/favicon.svg" alt="HMS" className="h-20 w-20 object-contain" />
@@ -99,6 +100,7 @@ export default function PatientLogin() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }
