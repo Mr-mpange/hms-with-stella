@@ -4426,11 +4426,11 @@ export default function DoctorDashboard() {
           }}
         />
       )}
-    </DashboardLayout>
 
       <SharedRecordsLookup
         open={showSharedRecords}
         onOpenChange={setShowSharedRecords}
       />
+    </DashboardLayout>
   );
 }

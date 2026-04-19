@@ -5,7 +5,7 @@
 
     RewriteEngine On
 
-    # Handle Authorization Header
+    # Handle Authorization Header (required for Bearer tokens on Hostinger)
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
@@ -22,32 +22,52 @@
 
 # CORS Headers
 <IfModule mod_headers.c>
-    Header always set Access-Control-Allow-Origin "https://hasetcompany.or.tz"
-    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, X-XSRF-TOKEN"
     Header always set Access-Control-Allow-Credentials "true"
-    Header always set X-Content-Type-Options nosniff
-    Header always set X-Frame-Options SAMEORIGIN
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
 </IfModule>
 
 # Handle preflight OPTIONS requests
 <IfModule mod_rewrite.c>
     RewriteCond %{REQUEST_METHOD} OPTIONS
-    RewriteRule ^(.*)$ $1 [R=200,L]
+    RewriteRule .* - [R=200,L]
 </IfModule>
 
-# Disable directory browsing
-Options -Indexes
-
-# Security - Prevent access to sensitive files
+# Security — block access to hidden files
 <FilesMatch "^\.">
     Order allow,deny
     Deny from all
 </FilesMatch>
+
+# Block access to sensitive Laravel files
+<FilesMatch "(composer\.(json|lock)|package\.json|artisan|phpunit\.xml)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Enable gzip compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css application/json application/javascript text/xml application/xml image/svg+xml
+</IfModule>
+
+# Cache static assets
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+</IfModule>
 
 # Set correct MIME types
 <IfModule mod_mime.c>
     AddType application/json .json
     AddType application/javascript .js
     AddType text/css .css
+    AddType image/svg+xml .svg
 </IfModule>
