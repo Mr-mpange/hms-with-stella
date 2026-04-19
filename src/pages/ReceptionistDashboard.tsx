@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { PatientIdentityDialog } from '@/components/PatientIdentityDialog';
 
 export default function ReceptionistDashboard() {
   const { user } = useAuth();
@@ -62,6 +63,8 @@ export default function ReceptionistDashboard() {
   const [selectedInsurancePatient, setSelectedInsurancePatient] = useState<any>(null);
   const [showInsuranceDetailDialog, setShowInsuranceDetailDialog] = useState(false);
   const [insuranceClaims, setInsuranceClaims] = useState<any[]>([]);
+  const [selectedStellarPatient, setSelectedStellarPatient] = useState<any>(null);
+  const [showStellarDialog, setShowStellarDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true); // Initial load only
@@ -2372,6 +2375,18 @@ export default function ReceptionistDashboard() {
                             <FileText className="h-3 w-3" />
                             View Report
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1 text-blue-600 border-blue-200 hover:bg-blue-50"
+                            onClick={() => {
+                              setSelectedStellarPatient(p);
+                              setShowStellarDialog(true);
+                            }}
+                          >
+                            <span className="text-xs">⭐</span>
+                            Stellar ID
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );
@@ -3637,6 +3652,16 @@ export default function ReceptionistDashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Stellar Identity Dialog */}
+      {selectedStellarPatient && (
+        <PatientIdentityDialog
+          open={showStellarDialog}
+          onOpenChange={setShowStellarDialog}
+          patient={selectedStellarPatient}
+          onIdentityAssigned={fetchData}
+        />
+      )}
 
     </>
   );

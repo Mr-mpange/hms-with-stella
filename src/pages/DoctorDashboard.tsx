@@ -14,7 +14,8 @@ import api from '@/lib/api';
 import { fetchWithCache, invalidateCache } from '@/lib/cache';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Users, Activity, Loader2, FlaskConical, Pill, Clock, CheckCircle, X, Eye, Stethoscope, TestTube, FileText, Package, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Users, Activity, Loader2, FlaskConical, Pill, Clock, CheckCircle, X, Eye, Stethoscope, TestTube, FileText, Package, AlertCircle, AlertTriangle, Search } from 'lucide-react';
+import { SharedRecordsLookup } from '@/components/SharedRecordsLookup';
 import { format, isAfter, isToday, parseISO, isBefore, addMinutes, addDays } from 'date-fns';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { cn, logActivity } from '@/lib/utils';
@@ -77,6 +78,7 @@ export default function DoctorDashboard() {
   const [loading, setLoading] = useState(true); // Initial load only
   const [refreshing, setRefreshing] = useState(false); // Background refresh
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [showSharedRecords, setShowSharedRecords] = useState(false);
   const [showLabResults, setShowLabResults] = useState(false);
   const [showPrescriptions, setShowPrescriptions] = useState(false);
   const [showRescheduleForm, setShowRescheduleForm] = useState(false);
@@ -2052,6 +2054,18 @@ export default function DoctorDashboard() {
             </div>
           </div>
         )}
+
+        {/* Shared Records Lookup Button */}
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            className="gap-2 border-blue-200 text-blue-700 hover:bg-blue-50"
+            onClick={() => setShowSharedRecords(true)}
+          >
+            <Search className="h-4 w-4" />
+            Access Shared Patient Records
+          </Button>
+        </div>
 
         {/* Stats Cards */}
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
@@ -4413,5 +4427,10 @@ export default function DoctorDashboard() {
         />
       )}
     </DashboardLayout>
+
+      <SharedRecordsLookup
+        open={showSharedRecords}
+        onOpenChange={setShowSharedRecords}
+      />
   );
 }
