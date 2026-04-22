@@ -10,7 +10,7 @@ class Invoice extends Model
     use HasUuids;
 
     protected $fillable = [
-        'patient_id', 'invoice_number', 'invoice_date', 'due_date',
+        'patient_id', 'visit_id', 'invoice_number', 'invoice_date', 'due_date',
         'total_amount', 'paid_amount', 'balance', 'status', 'notes'
     ];
 

@@ -107,6 +107,25 @@ class PrescriptionController extends Controller
 
         $prescription->update($validated);
 
+        // When prescription is dispensed → check if visit should move to billing
+        if ($prescription->visit_id && $request->input('status') === 'Completed') {
+            $visit = \App\Models\PatientVisit::find($prescription->visit_id);
+            if ($visit && $visit->current_stage === 'pharmacy') {
+                $pending = \App\Models\Prescription::where('visit_id', $visit->id)
+                    ->where('status', '!=', 'Completed')
+                    ->count();
+                if ($pending === 0) {
+                    $visit->update([
+                        'pharmacy_status'       => 'Completed',
+                        'pharmacy_completed_at' => now(),
+                        'current_stage'         => 'billing',
+                        'billing_status'        => 'Pending',
+                    ]);
+                    \Log::info('PrescriptionController: all dispensed → billing', ['visit_id' => $visit->id]);
+                }
+            }
+        }
+
         return response()->json(['prescription' => $prescription->load(['items', 'patient', 'doctor'])]);
     }
 

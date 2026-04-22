@@ -79,14 +79,31 @@ class LabTestController extends Controller
     public function update(Request $request, $id)
     {
         $labTest = LabTest::findOrFail($id);
-        
+
         $labTest->update($request->only([
-            'status',
-            'results',
-            'notes',
-            'completed_at'
+            'status', 'result_value', 'result_unit', 'normal_range',
+            'result_notes', 'results', 'notes', 'completed_at',
         ]));
-        
+
+        // When all lab tests for a visit are complete → move visit to billing
+        if ($labTest->visit_id && $request->input('status') === 'Completed') {
+            $visit = \App\Models\PatientVisit::find($labTest->visit_id);
+            if ($visit && $visit->current_stage === 'lab') {
+                $pending = \App\Models\LabTest::where('visit_id', $visit->id)
+                    ->where('status', '!=', 'Completed')
+                    ->count();
+                if ($pending === 0) {
+                    $visit->update([
+                        'lab_status'       => 'Completed',
+                        'lab_completed_at' => now(),
+                        'current_stage'    => 'billing',
+                        'billing_status'   => 'Pending',
+                    ]);
+                    \Log::info('LabTestController: all tests done → billing', ['visit_id' => $visit->id]);
+                }
+            }
+        }
+
         return response()->json(['labTest' => $labTest]);
     }
     
