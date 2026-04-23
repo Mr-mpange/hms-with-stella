@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\LabTest;
+use App\Http\Controllers\VisitController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -93,12 +94,16 @@ class LabTestController extends Controller
                     ->where('status', '!=', 'Completed')
                     ->count();
                 if ($pending === 0) {
-                    $visit->update([
+                    // Use VisitController to trigger autoCreateInvoice
+                    $visitController = app(VisitController::class);
+                    $fakeRequest = new \Illuminate\Http\Request();
+                    $fakeRequest->merge([
                         'lab_status'       => 'Completed',
-                        'lab_completed_at' => now(),
+                        'lab_completed_at' => now()->toDateTimeString(),
                         'current_stage'    => 'billing',
                         'billing_status'   => 'Pending',
                     ]);
+                    $visitController->update($fakeRequest, $visit->id);
                     \Log::info('LabTestController: all tests done → billing', ['visit_id' => $visit->id]);
                 }
             }

@@ -33,7 +33,7 @@ class SocketHelper
             return false;
 
         } catch (\Exception $e) {
-            Log::error("Socket emit error: {$e->getMessage()}");
+            Log::debug("Socket unavailable: {$e->getMessage()}");
             return false;
         }
     }

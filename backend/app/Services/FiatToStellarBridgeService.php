@@ -86,14 +86,19 @@ class FiatToStellarBridgeService
 
         if ($cid && !empty($options['insurance_number'])) {
             try {
+                // Look up the CID anchor tx hash from the medical record (not the payment tx)
+                $cidAnchorTxHash = $options['cid_anchor_tx_hash']
+                    ?? $this->findCidAnchorTxHash($cid, $payment->patient_id);
+
                 $sorobanTxHash = $this->soroban->releasePayment([
-                    'patient_id'         => $payment->patient_id,
-                    'insurance_number'   => $options['insurance_number'],
-                    'cid'                => $cid,
-                    'stellar_tx_hash'    => $stellarTxHash,
-                    'doctor_approved'    => $options['doctor_approved'] ?? false,
-                    'amount'             => $xlmAmount,
-                    'destination_wallet' => $destination,
+                    'patient_id'          => $payment->patient_id,
+                    'insurance_number'    => $options['insurance_number'],
+                    'cid'                 => $cid,
+                    'stellar_tx_hash'     => $stellarTxHash,
+                    'cid_anchor_tx_hash'  => $cidAnchorTxHash,
+                    'doctor_approved'     => $options['doctor_approved'] ?? false,
+                    'amount'              => $xlmAmount,
+                    'destination_wallet'  => $destination,
                 ]);
 
                 $result['soroban_released'] = true;
@@ -188,6 +193,23 @@ class FiatToStellarBridgeService
 
         $record = $this->recordRepo->getByPatient($payment->patient_id)->first();
         return $record?->cid_hash ?? null;
+    }
+
+    /**
+     * Find the Stellar tx hash that anchored a CID (from the medical record).
+     * This is different from the payment tx hash.
+     */
+    private function findCidAnchorTxHash(string $cid, ?string $patientId): ?string
+    {
+        $record = $this->recordRepo->findByCid($cid);
+        if ($record) {
+            return $record->stellar_tx_hash ?? null;
+        }
+        if ($patientId) {
+            $record = $this->recordRepo->getByPatient($patientId)->first();
+            return $record?->stellar_tx_hash ?? null;
+        }
+        return null;
     }
 }
 

@@ -60,6 +60,50 @@ class SorobanService
     }
 
     /**
+     * Register a patient's insurance on the Soroban contract.
+     * Calls: register_insurance(patient_id: String, insurance_number: String)
+     * Idempotent — safe to call multiple times.
+     */
+    public function registerInsurance(string $patientId, string $insuranceNumber): void
+    {
+        $this->assertContractsConfigured();
+
+        $this->invokeContractFunction(
+            $this->contractHex($this->insuranceContractId),
+            'register_insurance',
+            [
+                XdrSCVal::forString($patientId),
+                XdrSCVal::forString($insuranceNumber),
+            ]
+        );
+
+        Log::info('SorobanService: insurance registered', [
+            'patient_id'       => $patientId,
+            'insurance_number' => $insuranceNumber,
+        ]);
+    }
+
+    /**
+     * Store a CID in the insurance contract.
+     * Calls: store_cid(cid: String, stellar_tx_hash: String)
+     */
+    public function invokeStoreCid(string $cid, string $stellarTxHash): void
+    {
+        $this->assertContractsConfigured();
+
+        $this->invokeContractFunction(
+            $this->contractHex($this->insuranceContractId),
+            'store_cid',
+            [
+                XdrSCVal::forString($cid),
+                XdrSCVal::forString($stellarTxHash),
+            ]
+        );
+
+        Log::info('SorobanService: CID stored in insurance contract', ['cid' => $cid]);
+    }
+
+    /**
      * Validate insurance via Soroban contract.
      * Calls: validate_insurance(patient_id: String, insurance_number: String) → Bool
      */
@@ -68,7 +112,8 @@ class SorobanService
         $this->assertContractsConfigured();
 
         try {
-            $result = $this->invokeContractFunction(
+            // Read-only query — use simulate only, no tx submission
+            $result = $this->simulateContractCall(
                 $this->contractHex($this->insuranceContractId),
                 'validate_insurance',
                 [
@@ -99,7 +144,8 @@ class SorobanService
     {
         $this->assertContractsConfigured();
 
-        $result = $this->invokeContractFunction(
+        // Read-only query — use simulate only
+        $result = $this->simulateContractCall(
             $this->contractHex($this->insuranceContractId),
             'verify_cid',
             [
@@ -127,7 +173,11 @@ class SorobanService
             throw new RuntimeException('Smart contract rejected: insurance is not active.');
         }
 
-        if (! $this->verifyCidOnChain($params['cid'], $params['stellar_tx_hash'])) {
+        // verify_cid uses the CID anchor tx hash (stored when CID was anchored on Stellar),
+        // NOT the payment tx hash. Look it up from the medical record if not provided.
+        $cidAnchorTxHash = $params['cid_anchor_tx_hash'] ?? $params['stellar_tx_hash'];
+
+        if (! $this->verifyCidOnChain($params['cid'], $cidAnchorTxHash)) {
             throw new RuntimeException('Smart contract rejected: CID not verified on Stellar.');
         }
 
@@ -143,7 +193,7 @@ class SorobanService
             [
                 XdrSCVal::forString($params['patient_id']),
                 XdrSCVal::forString($params['cid']),
-                XdrSCVal::forString($params['destination_wallet']),
+                XdrSCVal::forAddress(\Soneso\StellarSDK\Xdr\XdrSCAddress::forAccountId($params['destination_wallet'])),
                 XdrSCVal::forI128Parts(0, $amountStroops),
             ]
         );
@@ -161,8 +211,42 @@ class SorobanService
     // ─── Private ────────────────────────────────────────────────────────────
 
     /**
-     * Invoke a contract function, simulate, sign, send, poll for result.
-     * Returns the XdrSCVal result.
+     * Simulate a read-only contract call and return the result directly from
+     * the simulate response (no transaction submission needed).
+     */
+    private function simulateContractCall(string $contractIdHex, string $functionName, array $args): ?XdrSCVal
+    {
+        $account = $this->sdk->requestAccount($this->hospitalPublicKey);
+
+        $hostFunction = new InvokeContractHostFunction($contractIdHex, $functionName, $args);
+        $operation    = (new InvokeHostFunctionOperationBuilder($hostFunction))->build();
+
+        $transaction = (new TransactionBuilder($account))
+            ->addOperation($operation)
+            ->build();
+
+        $simResponse = $this->soroban->simulateTransaction(
+            new SimulateTransactionRequest($transaction)
+        );
+
+        if ($simResponse->resultError !== null) {
+            throw new RuntimeException(
+                "Soroban simulate failed [{$functionName}]: " . $simResponse->resultError
+            );
+        }
+
+        // Return value is in the simulate results — no need to submit
+        $results = $simResponse->results;
+        if ($results !== null && $results->count() > 0) {
+            return $results->toArray()[0]->getResultValue();
+        }
+
+        return null;
+    }
+
+    /**
+     * Invoke a state-changing contract function: simulate → sign → send → poll.
+     * Returns the XdrSCVal result from the simulate response (sufficient for bool returns).
      */
     private function invokeContractFunction(string $contractIdHex, string $functionName, array $args): ?XdrSCVal
     {
@@ -186,6 +270,13 @@ class SorobanService
             );
         }
 
+        // Capture return value from simulate before submitting
+        $resultVal = null;
+        $results   = $simResponse->results;
+        if ($results !== null && $results->count() > 0) {
+            $resultVal = $results->toArray()[0]->getResultValue();
+        }
+
         $transaction->setSorobanTransactionData($simResponse->transactionData);
         $transaction->addResourceFee($simResponse->minResourceFee ?? 0);
         $transaction->sign($keyPair, $this->network);
@@ -198,7 +289,9 @@ class SorobanService
             );
         }
 
-        return $this->pollTransaction($sendResponse->hash);
+        $this->pollTransaction($sendResponse->hash);
+
+        return $resultVal;
     }
 
     /**

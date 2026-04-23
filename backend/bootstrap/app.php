@@ -16,6 +16,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'stellar' => \App\Http\Middleware\RequireStellar::class,
         ]);
+
+        // Return JSON 401 instead of redirecting to a named 'login' route
+        $middleware->redirectGuestsTo(fn () => response()->json([
+            'message' => 'Unauthenticated.',
+        ], 401));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(function ($request, $e) {

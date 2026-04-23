@@ -382,8 +382,17 @@ Route::middleware('auth:sanctum')->group(function () {
             $ids = explode(',', $request->ids);
             $query->whereIn('id', $ids);
         }
+
+        if ($request->has('search') && strlen($request->search) >= 2) {
+            $q = $request->search;
+            $query->where(function($sub) use ($q) {
+                $sub->where('name', 'like', "%{$q}%")
+                    ->orWhere('email', 'like', "%{$q}%");
+            });
+        }
         
-        return response()->json(['profiles' => $query->get()]);
+        $users = $query->get();
+        return response()->json(['profiles' => $users, 'users' => $users, 'doctors' => $users]);
     });
     
     // User Roles (for multi-role support - currently simplified)
@@ -1241,38 +1250,35 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 // ─── Decentralized HMS: IPFS + Stellar + Soroban ────────────────────────────
-// All routes below require Stellar to be reachable.
-// If Stellar is down, these endpoints return 503 — by design.
 use App\Http\Controllers\MedicalRecordController;
 use App\Http\Controllers\IpfsController;
 use App\Http\Controllers\StellarController;
 use App\Http\Controllers\SorobanController;
 
-Route::middleware(['auth:sanctum', 'stellar'])->group(function () {
-
-    // Medical Records — requires IPFS + Stellar (CID anchoring)
-    Route::post('/records/create',       [MedicalRecordController::class, 'create']);
+// Read-only routes — no Stellar check needed
+Route::middleware('auth:sanctum')->group(function () {
     Route::get('/records/{patient_id}',  [MedicalRecordController::class, 'getByPatient']);
-    Route::post('/records/upload-ipfs',  [MedicalRecordController::class, 'uploadFile']);
-
-    // IPFS
-    Route::post('/ipfs/upload',          [IpfsController::class, 'upload']);
     Route::get('/ipfs/{cid}',            [IpfsController::class, 'retrieve']);
+    Route::get('/stellar/verify/{cid}',  [StellarController::class, 'verify']);
+});
 
-    // Stellar
+// Write routes — require Stellar to be reachable
+Route::middleware(['auth:sanctum', 'stellar'])->group(function () {
+    Route::post('/records/create',       [MedicalRecordController::class, 'create']);
+    Route::post('/records/upload-ipfs',  [MedicalRecordController::class, 'uploadFile']);
+    Route::post('/ipfs/upload',          [IpfsController::class, 'upload']);
     Route::post('/stellar/store-hash',   [StellarController::class, 'storeHash']);
     Route::post('/stellar/payment',      [StellarController::class, 'payment']);
-    Route::get('/stellar/verify/{cid}',  [StellarController::class, 'verify']);
-
-    // Soroban Smart Contracts
-    Route::post('/contract/insurance-check',  [SorobanController::class, 'insuranceCheck']);
-    Route::post('/contract/release-payment',  [SorobanController::class, 'releasePayment']);
+    Route::post('/contract/insurance-check',    [SorobanController::class, 'insuranceCheck']);
+    Route::post('/contract/register-insurance', [SorobanController::class, 'registerInsurance']);
+    Route::post('/contract/release-payment',    [SorobanController::class, 'releasePayment']);
 });
 
 // ─── Fiat → Stellar Bridge ───────────────────────────────────────────────────
 use App\Http\Controllers\BridgeController;
 
-Route::middleware(['auth:sanctum', 'stellar'])->group(function () {
+// Bridge routes — auth only, Stellar errors handled gracefully inside the service
+Route::middleware('auth:sanctum')->group(function () {
     Route::post('/bridge/payment/{payment_id}', [BridgeController::class, 'bridgePayment']);
     Route::get('/bridge/rate',                  [BridgeController::class, 'getRate']);
     Route::get('/bridge/convert',               [BridgeController::class, 'convert']);

@@ -16,6 +16,34 @@ class SorobanController extends Controller
     ) {}
 
     /**
+     * POST /api/contract/register-insurance
+     * Register a patient's insurance on the Soroban contract (idempotent).
+     * Must be called before validate_insurance can return true.
+     */
+    public function registerInsurance(Request $request): JsonResponse
+    {
+        $request->validate([
+            'patient_id'       => 'required|string',
+            'insurance_number' => 'required|string',
+        ]);
+
+        try {
+            $this->soroban->registerInsurance(
+                $request->input('patient_id'),
+                $request->input('insurance_number')
+            );
+
+            return response()->json([
+                'success'    => true,
+                'patient_id' => $request->input('patient_id'),
+                'message'    => 'Insurance registered on Soroban contract',
+            ]);
+        } catch (Throwable $e) {
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * POST /api/contract/insurance-check
      * Validate insurance status via Soroban smart contract.
      */

@@ -11,7 +11,8 @@ class LabTest extends Model
 
     protected $fillable = [
         'patient_id', 'doctor_id', 'visit_id', 'test_name', 'test_type',
-        'service_id', 'test_date', 'status', 'results', 'notes', 'performed_by'
+        'service_id', 'test_date', 'status', 'results', 'notes', 'performed_by',
+        'price', 'is_draft',
     ];
 
     protected $casts = [

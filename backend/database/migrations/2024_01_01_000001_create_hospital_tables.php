@@ -184,13 +184,15 @@ return new class extends Migration
         Schema::create('lab_tests', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('patient_id');
-            $table->uuid('doctor_id');
+            $table->uuid('doctor_id')->nullable();
             $table->uuid('visit_id')->nullable();
             $table->string('test_name');
             $table->string('test_type', 100)->nullable();
             $table->uuid('service_id')->nullable();
-            $table->date('test_date');
-            $table->enum('status', ['Pending', 'In Progress', 'Completed', 'Cancelled'])->default('Pending');
+            $table->date('test_date')->nullable();
+            $table->enum('status', ['Pending', 'In Progress', 'Completed', 'Cancelled', 'Draft', 'Ordered', 'Sample Collected'])->default('Pending');
+            $table->decimal('price', 10, 2)->nullable();
+            $table->boolean('is_draft')->default(false);
             $table->text('results')->nullable();
             $table->text('notes')->nullable();
             $table->uuid('performed_by')->nullable();
@@ -202,13 +204,14 @@ return new class extends Migration
         Schema::create('invoices', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('patient_id');
+            $table->uuid('visit_id')->nullable();
             $table->string('invoice_number', 50)->unique();
             $table->date('invoice_date');
             $table->date('due_date')->nullable();
             $table->decimal('total_amount', 10, 2);
             $table->decimal('paid_amount', 10, 2)->default(0);
             $table->decimal('balance', 10, 2);
-            $table->enum('status', ['Pending', 'Partial', 'Paid', 'Cancelled'])->default('Pending');
+            $table->enum('status', ['Pending', 'Partial', 'Partially Paid', 'Paid', 'Cancelled'])->default('Pending');
             $table->text('notes')->nullable();
             $table->timestamps();
             $table->index(['patient_id', 'invoice_number', 'status']);

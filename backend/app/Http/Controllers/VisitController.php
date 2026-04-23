@@ -201,12 +201,14 @@ class VisitController extends Controller
             'lab_results_reviewed_at' => 'sometimes|date',
         ]);
 
+        $previousStage = $visit->current_stage;
+
         $visit->update($validated);
 
         // ── Auto-create invoice when visit reaches billing stage ──────────
         $movingToBilling = isset($validated['current_stage'])
             && $validated['current_stage'] === 'billing'
-            && $visit->getOriginal('current_stage') !== 'billing';
+            && $previousStage !== 'billing';
 
         if ($movingToBilling) {
             $this->autoCreateInvoice($visit);

@@ -19,7 +19,7 @@ class IpfsServiceTest extends TestCase
     public function test_encrypt_and_upload_returns_cid_and_key_ref(): void
     {
         Http::fake([
-            '*' => Http::response(['Hash' => 'QmMockedCID123456'], 200),
+            '*' => Http::response(['IpfsHash' => 'QmMockedCID123456'], 200),
         ]);
 
         $result = $this->service->encryptAndUpload(['diagnosis' => 'Test']);
@@ -32,7 +32,7 @@ class IpfsServiceTest extends TestCase
     public function test_encrypted_content_differs_from_plaintext(): void
     {
         Http::fake([
-            '*' => Http::response(['Hash' => 'QmEncryptedCID'], 200),
+            '*' => Http::response(['IpfsHash' => 'QmEncryptedCID'], 200),
         ]);
 
         $plaintext = 'sensitive medical data';
@@ -44,19 +44,9 @@ class IpfsServiceTest extends TestCase
 
     public function test_decrypt_content_restores_original(): void
     {
-        Http::fake([
-            '*' => Http::response(['Hash' => 'QmDecryptCID'], 200),
-        ]);
-
+        // Test encrypt/decrypt round-trip directly via reflection
         $original = 'patient data to encrypt';
-        $result   = $this->service->encryptAndUpload($original);
 
-        // Retrieve and decrypt
-        Http::fake([
-            '*' => Http::response(base64_decode(''), 200), // will be replaced below
-        ]);
-
-        // Test decrypt directly using key_ref
         $reflection = new \ReflectionClass($this->service);
         $method     = $reflection->getMethod('encryptAes256');
         $method->setAccessible(true);

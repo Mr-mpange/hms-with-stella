@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Prescription;
 use App\Models\PrescriptionItem;
+use App\Http\Controllers\VisitController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
@@ -115,12 +116,16 @@ class PrescriptionController extends Controller
                     ->where('status', '!=', 'Completed')
                     ->count();
                 if ($pending === 0) {
-                    $visit->update([
+                    // Use VisitController to trigger autoCreateInvoice
+                    $visitController = app(VisitController::class);
+                    $fakeRequest = new \Illuminate\Http\Request();
+                    $fakeRequest->merge([
                         'pharmacy_status'       => 'Completed',
-                        'pharmacy_completed_at' => now(),
+                        'pharmacy_completed_at' => now()->toDateTimeString(),
                         'current_stage'         => 'billing',
                         'billing_status'        => 'Pending',
                     ]);
+                    $visitController->update($fakeRequest, $visit->id);
                     \Log::info('PrescriptionController: all dispensed → billing', ['visit_id' => $visit->id]);
                 }
             }

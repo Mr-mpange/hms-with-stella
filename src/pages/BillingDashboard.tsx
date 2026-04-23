@@ -2896,19 +2896,106 @@ export default function BillingDashboard() {
 
   const updateClaimStatus = async (claimId: string, newStatus: string, approvedAmount?: number) => {
     try {
+      // Find the claim for context
+      const claim = insuranceClaims.find(c => c.id === claimId);
+
       await api.put(`/insurance/claims/${claimId}`, {
         status: newStatus,
         approved_amount: approvedAmount ?? undefined,
         approval_date: ['Approved', 'Paid'].includes(newStatus) ? new Date().toISOString().split('T')[0] : undefined,
         payment_date: newStatus === 'Paid' ? new Date().toISOString().split('T')[0] : undefined,
       });
+
       setInsuranceClaims(prev => prev.map(c => c.id === claimId
         ? { ...c, status: newStatus, approved_amount: approvedAmount ?? c.approved_amount,
             approval_date: ['Approved','Paid'].includes(newStatus) ? new Date().toISOString() : c.approval_date,
             payment_date: newStatus === 'Paid' ? new Date().toISOString() : c.payment_date }
         : c
       ));
+
       toast.success(`Claim ${newStatus.toLowerCase()} successfully`);
+
+      // ── When claim is marked Paid → automate Stellar + Soroban ──────────
+      if (newStatus === 'Paid' && claim) {
+        const paidAmount = approvedAmount ?? Number(claim.claim_amount);
+        const insuranceNumber = claim.patient?.insurance_number;
+        const patientId = claim.patient_id || claim.patient?.id;
+
+        try {
+          // 1. Register insurance on Soroban contract (idempotent — safe to call each time)
+          if (insuranceNumber && patientId) {
+            await api.post('/contract/register-insurance', {
+              patient_id: patientId,
+              insurance_number: insuranceNumber,
+            }).catch(() => {}); // non-blocking if already registered
+          }
+
+          // 2. Create a payment record for this insurance claim
+          const paymentRes = await api.post('/payments', {
+            patient_id: patientId,
+            invoice_id: claim.invoice_id ?? undefined,
+            amount: paidAmount,
+            payment_method: 'Insurance',
+            payment_type: 'Insurance Claim',
+            payment_date: new Date().toISOString(),
+            reference_number: claim.claim_number,
+            notes: `Insurance payment for claim ${claim.claim_number}`,
+            status: 'Completed',
+          });
+
+          const paymentId: string | null = paymentRes.data?.payment?.id ?? null;
+
+          if (paymentId) {
+            // 3. Bridge to Stellar + trigger Soroban smart contract
+            const destWallet = import.meta.env.VITE_HOSPITAL_STELLAR_WALLET
+              || 'GCIUVYTB76RWSV2FZ7URYCUPVLUPGWP5THPLO6F4NP6NUINZX4WVDFEW';
+            const network = import.meta.env.VITE_STELLAR_NETWORK || 'testnet';
+
+            // Fetch patient's medical record CID if available
+            let cid: string | undefined;
+            try {
+              const recRes = await api.get(`/medical-records?patient_id=${patientId}`);
+              const records = recRes.data?.records || recRes.data?.data || [];
+              cid = records[0]?.cid_hash ?? undefined;
+            } catch { /* no record — Soroban step will be skipped */ }
+
+            const bridgeRes = await api.post(`/bridge/payment/${paymentId}`, {
+              destination_wallet: destWallet,
+              insurance_number: insuranceNumber,
+              doctor_approved: true,   // claim approval = doctor approved
+              ...(cid ? { cid } : {}),
+            });
+
+            if (bridgeRes.data?.stellar_tx_hash) {
+              const txHash: string = bridgeRes.data.stellar_tx_hash;
+              const xlm = Number(bridgeRes.data.xlm_amount).toFixed(4);
+              const explorerUrl = `https://stellar.expert/explorer/${network}/tx/${txHash}`;
+              const sorobanFired = bridgeRes.data?.soroban_released === true;
+
+              toast.success(
+                sorobanFired
+                  ? `🤝 Smart contract released ${xlm} XLM — tx ${txHash.substring(0, 8)}…`
+                  : `⭐ Stellar: ${xlm} XLM — tx ${txHash.substring(0, 8)}…`,
+                {
+                  duration: 12000,
+                  action: { label: 'View on Stellar', onClick: () => window.open(explorerUrl, '_blank') },
+                }
+              );
+
+              // Patch rawPaymentsData so Today's Payments table shows the link
+              setRawPaymentsData(prev => [...prev, {
+                ...paymentRes.data.payment,
+                stellar_tx_hash: txHash,
+                xlm_amount: xlm,
+                bridge_status: 'bridged',
+              }]);
+            }
+          }
+        } catch (bridgeErr: any) {
+          // Bridge/Soroban failure is non-blocking — claim is already marked Paid
+          toast.warning('Claim paid, but Stellar bridge failed: ' + (bridgeErr?.response?.data?.error || bridgeErr?.message || 'unknown error'));
+        }
+      }
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to update claim');
     }
@@ -3135,7 +3222,8 @@ export default function BillingDashboard() {
       };
 
       // Record the bulk payment
-      await api.post('/payments', paymentData);
+      const bulkPayRes = await api.post('/payments', paymentData);
+      const bulkPaymentId: string | null = bulkPayRes.data?.payment?.id ?? null;
 
       // Update each invoice
       for (const invoice of unpaidInvoices) {
@@ -3157,6 +3245,15 @@ export default function BillingDashboard() {
       });
 
       toast.success(`Bulk payment of TSh${totalAmount.toFixed(2)} recorded for ${unpaidInvoices.length} invoices!`);
+
+      // ── Auto-bridge bulk payment to Stellar ──────────────────────────────
+      if (bulkPaymentId) {
+        try {
+          await bridgeToStellar(bulkPaymentId);
+        } catch {
+          // Non-blocking
+        }
+      }
       
       // Refresh data
       fetchData(false);
@@ -3505,6 +3602,38 @@ export default function BillingDashboard() {
     }
   };
 
+  // ── Shared Stellar bridge helper ─────────────────────────────────────────
+  const bridgeToStellar = async (paymentId: string) => {
+    const destWallet = import.meta.env.VITE_HOSPITAL_STELLAR_WALLET
+      || 'GCIUVYTB76RWSV2FZ7URYCUPVLUPGWP5THPLO6F4NP6NUINZX4WVDFEW';
+    const network = import.meta.env.VITE_STELLAR_NETWORK || 'testnet';
+
+    const bridgeRes = await api.post(`/bridge/payment/${paymentId}`, {
+      destination_wallet: destWallet,
+    });
+
+    if (bridgeRes.data?.stellar_tx_hash) {
+      const txHash: string = bridgeRes.data.stellar_tx_hash;
+      const xlm = Number(bridgeRes.data.xlm_amount).toFixed(4);
+      const explorerUrl = `https://stellar.expert/explorer/${network}/tx/${txHash}`;
+
+      toast.success(`⭐ Stellar: ${xlm} XLM — tx ${txHash.substring(0, 8)}…`, {
+        duration: 10000,
+        action: { label: 'View on Stellar', onClick: () => window.open(explorerUrl, '_blank') },
+      });
+
+      // Patch rawPaymentsData so the Today's Payments table shows the link immediately
+      setRawPaymentsData(prev => prev.map(p =>
+        p.id === paymentId
+          ? { ...p, stellar_tx_hash: txHash, xlm_amount: xlm, bridge_status: 'bridged' }
+          : p
+      ));
+
+      return { txHash, xlm };
+    }
+    return null;
+  };
+
   const handleRecordPayment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -3602,8 +3731,11 @@ export default function BillingDashboard() {
       status: 'Completed',
     };
 
+    let createdPaymentId: string | null = null;
+
     try {
       const paymentResponse = await api.post('/payments', paymentData);
+      createdPaymentId = paymentResponse.data?.payment?.id ?? null;
 
       // Refresh invoice data to get updated amounts
       const updatedInvoiceResponse = await api.get(`/billing/invoices/${actualInvoice.id}`);
@@ -3718,6 +3850,25 @@ export default function BillingDashboard() {
     }
 
     toast.success(`Payment of TSh${amount.toFixed(2)} recorded successfully`);
+
+    // ── Auto-bridge to Stellar ────────────────────────────────────────────
+    try {
+      const paymentId = createdPaymentId;
+      if (paymentId) {
+        const result = await bridgeToStellar(paymentId);
+        if (result) {
+          // Also patch invoice list for the Stellar hash display
+          setRawInvoicesData(prev => prev.map(inv =>
+            inv.id === actualInvoice.id
+              ? { ...inv, stellar_tx_hash: result.txHash, xlm_amount: result.xlm }
+              : inv
+          ));
+        }
+      }
+    } catch {
+      // Bridge failure is non-blocking — payment is still recorded
+    }
+
     setPaymentDialogOpen(false);
     setSelectedInvoice(null);
     setPaymentMethod('');
@@ -4000,6 +4151,7 @@ export default function BillingDashboard() {
                         <TableHead className="min-w-[100px]">Latest Date</TableHead>
                         <TableHead className="min-w-[80px]">Status</TableHead>
                         <TableHead className="min-w-[100px]">Actions</TableHead>
+                        <TableHead className="min-w-[120px]">Blockchain</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -4113,6 +4265,42 @@ export default function BillingDashboard() {
                                 )}
                               </div>
                             )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1 text-xs">
+                              {patientData.invoices?.some((inv: any) => inv.visit_id) && (
+                                <a
+                                  href={`/api/records/${patientData.patient.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                                  title="View medical records on IPFS"
+                                >
+                                  📄 Records
+                                </a>
+                              )}
+                              {patientData.invoices?.some((inv: any) => inv.payments?.some((p: any) => p.stellar_tx_hash)) && (
+                                (() => {
+                                  const txHash = patientData.invoices
+                                    .flatMap((inv: any) => inv.payments || [])
+                                    .find((p: any) => p.stellar_tx_hash)?.stellar_tx_hash;
+                                  const network = import.meta.env.VITE_STELLAR_NETWORK || 'testnet';
+                                  return txHash ? (
+                                    <a
+                                      href={`https://stellar.expert/explorer/${network}/tx/${txHash}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-purple-600 hover:text-purple-800 hover:underline flex items-center gap-1"
+                                      title="View on Stellar blockchain"
+                                    >
+                                      ⭐ On-chain
+                                    </a>
+                                  ) : (
+                                    <span className="text-purple-600 flex items-center gap-1">⭐ On-chain</span>
+                                  );
+                                })()
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -4294,6 +4482,7 @@ export default function BillingDashboard() {
                             <TableHead>Payment Method</TableHead>
                             <TableHead>Type</TableHead>
                             <TableHead>Reference</TableHead>
+                            <TableHead>Blockchain</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -4336,6 +4525,56 @@ export default function BillingDashboard() {
                               </TableCell>
                               <TableCell className="text-xs text-muted-foreground font-mono">
                                 {payment.reference_number || '-'}
+                              </TableCell>
+                              <TableCell>
+                                {payment.stellar_tx_hash ? (
+                                  <div className="flex flex-col gap-1">
+                                    <a
+                                      href={`https://stellar.expert/explorer/${import.meta.env.VITE_STELLAR_NETWORK || 'testnet'}/tx/${payment.stellar_tx_hash}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 hover:underline font-mono"
+                                      title={`View on Stellar: ${payment.stellar_tx_hash}`}
+                                    >
+                                      ⭐ {payment.stellar_tx_hash.substring(0, 8)}…
+                                    </a>
+                                    {payment.xlm_amount && (
+                                      <span className="text-xs text-green-600 font-medium">
+                                        ✅ {Number(payment.xlm_amount).toFixed(4)} XLM
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <button
+                                    className="text-xs text-gray-400 hover:text-purple-600 hover:underline transition-colors"
+                                    title="Bridge this payment to Stellar"
+                                    onClick={async () => {
+                                      try {
+                                        const destWallet = import.meta.env.VITE_HOSPITAL_STELLAR_WALLET
+                                          || 'GCIUVYTB76RWSV2FZ7URYCUPVLUPGWP5THPLO6F4NP6NUINZX4WVDFEW';
+                                        const res = await api.post(`/bridge/payment/${payment.id}`, {
+                                          destination_wallet: destWallet,
+                                        });
+                                        if (res.data?.stellar_tx_hash) {
+                                          const txHash = res.data.stellar_tx_hash;
+                                          const network = import.meta.env.VITE_STELLAR_NETWORK || 'testnet';
+                                          toast.success(`⭐ Bridged! TX: ${txHash.substring(0, 8)}…`, {
+                                            duration: 10000,
+                                            action: {
+                                              label: 'View on Stellar',
+                                              onClick: () => window.open(`https://stellar.expert/explorer/${network}/tx/${txHash}`, '_blank'),
+                                            },
+                                          });
+                                          fetchData(false);
+                                        }
+                                      } catch {
+                                        toast.error('Bridge to Stellar failed');
+                                      }
+                                    }}
+                                  >
+                                    🔗 Bridge
+                                  </button>
+                                )}
                               </TableCell>
                             </TableRow>
                           ))}
